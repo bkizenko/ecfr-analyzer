@@ -33,6 +33,7 @@
       border-radius: 4px;
       cursor: pointer;
       margin-right: 10px;
+      margin-bottom: 10px;
     }
     button:hover {
       background-color: #45a049;
@@ -41,17 +42,35 @@
       display: none;
       color: #666;
     }
+    .controls {
+      margin: 20px 0;
+    }
+    select {
+      padding: 8px;
+      margin-right: 10px;
+    }
+    .title-selector {
+      display: none;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
   <h1>eCFR Analyzer</h1>
   <p>A simple tool to analyze the Electronic Code of Federal Regulations</p>
   
-  <div>
+  <div class="controls">
     <button id="wordCountBtn">Show Agency Word Count</button>
     <button id="correctionsBtn">Show Corrections Over Time</button>
     <button id="titlesBtn">Show CFR Titles</button>
+    <button id="titleChangesBtn">Analyze Title Changes</button>
     <span id="loading">Loading data...</span>
+    
+    <div id="titleSelector" class="title-selector">
+      <label for="titleSelect">Select CFR Title:</label>
+      <select id="titleSelect"></select>
+      <button id="analyzeTitleBtn">Analyze</button>
+    </div>
   </div>
   
   <div class="chart-container">
@@ -64,21 +83,77 @@
       const wordCountBtn = document.getElementById('wordCountBtn');
       const correctionsBtn = document.getElementById('correctionsBtn');
       const titlesBtn = document.getElementById('titlesBtn');
+      const titleChangesBtn = document.getElementById('titleChangesBtn');
+      const titleSelector = document.getElementById('titleSelector');
+      const titleSelect = document.getElementById('titleSelect');
+      const analyzeTitleBtn = document.getElementById('analyzeTitleBtn');
       const loading = document.getElementById('loading');
       const chartTitle = document.getElementById('chartTitle');
       
+      // Event listeners
       wordCountBtn.addEventListener('click', function() {
+        hideSelector();
         showWordCount();
       });
       
       correctionsBtn.addEventListener('click', function() {
+        hideSelector();
         showCorrections();
       });
       
       titlesBtn.addEventListener('click', function() {
+        hideSelector();
         showTitles();
       });
       
+      titleChangesBtn.addEventListener('click', function() {
+        loadTitles();
+      });
+      
+      analyzeTitleBtn.addEventListener('click', function() {
+        const selectedTitle = titleSelect.value;
+        if (selectedTitle) {
+          showTitleChanges(selectedTitle);
+        }
+      });
+      
+      // Hide the title selector
+      function hideSelector() {
+        titleSelector.style.display = 'none';
+      }
+      
+      // Load available titles for the selector
+      async function loadTitles() {
+        loading.style.display = 'inline';
+        
+        try {
+          const response = await fetch('/api/titles');
+          const data = await response.json();
+          
+          // Clear previous options
+          titleSelect.innerHTML = '';
+          
+          // Add titles to the dropdown
+          data.titles.forEach(title => {
+            if (!title.reserved) {
+              const option = document.createElement('option');
+              option.value = title.number;
+              option.textContent = `Title ${title.number} - ${title.name}`;
+              titleSelect.appendChild(option);
+            }
+          });
+          
+          // Show the selector
+          titleSelector.style.display = 'block';
+        } catch (error) {
+          console.error('Error loading titles:', error);
+          chartTitle.textContent = 'Error loading titles';
+        } finally {
+          loading.style.display = 'none';
+        }
+      }
+      
+      // API call functions
       async function showWordCount() {
         chartTitle.textContent = 'Word Count by Agency';
         loading.style.display = 'inline';
@@ -136,6 +211,24 @@
         }
       }
       
+      async function showTitleChanges(titleNumber) {
+        chartTitle.textContent = `Changes Over Time for Title ${titleNumber}`;
+        loading.style.display = 'inline';
+        
+        try {
+          const response = await fetch(`/api/analytics/title-changes/${titleNumber}`);
+          const data = await response.json();
+          
+          createBarChart(data.changes, 'month', 'count', 'Month', 'Number of Changes');
+        } catch (error) {
+          console.error(`Error fetching title changes for title ${titleNumber}:`, error);
+          chartTitle.textContent = 'Error loading data';
+        } finally {
+          loading.style.display = 'none';
+        }
+      }
+      
+      // Utility functions
       function daysBetween(first, second) {
         // Copy dates to avoid modifying originals
         const date1 = new Date(first);
@@ -148,6 +241,7 @@
         return Math.floor(diff / (1000 * 60 * 60 * 24));
       }
       
+      // Chart creation function
       function createBarChart(data, xKey, yKey, xLabel, yLabel) {
         // Clear previous chart
         d3.select('#chart').selectAll('*').remove();

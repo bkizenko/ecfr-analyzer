@@ -74,6 +74,53 @@ app.get('/api/titles', async (req, res) => {
   }
 });
 
+// Get title changes over time for a specific title
+app.get('/api/analytics/title-changes/:title', async (req, res) => {
+  try {
+    const { title } = req.params;
+    const cacheKey = `title-changes-${title}`;
+    const cachedData = cache.get(cacheKey);
+    
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+    
+    // Get versions for the title
+    const currentYear = new Date().getFullYear();
+    const startDate = `${currentYear-2}-01-01`; // Past 2 years
+
+    const response = await axios.get(
+      `${ECFR_API_BASE}/versioner/v1/versions/title-${title}.json?issue_date[gte]=${startDate}`
+    );
+    
+    // Group changes by month
+    const changesByMonth = {};
+    response.data.content_versions.forEach(version => {
+      const date = new Date(version.issue_date);
+      const month = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!changesByMonth[month]) {
+        changesByMonth[month] = 0;
+      }
+      
+      changesByMonth[month]++;
+    });
+    
+    // Convert to array
+    const changes = Object.entries(changesByMonth).map(([month, count]) => ({
+      month,
+      count
+    })).sort((a, b) => a.month.localeCompare(b.month));
+    
+    const result = { changes };
+    cache.set(cacheKey, result);
+    res.json(result);
+  } catch (error) {
+    console.error(`Error fetching title changes for title ${req.params.title}:`, error.message);
+    res.status(500).json({ error: `Failed to fetch title changes for title ${req.params.title}` });
+  }
+});
+
 // Get word count by agency
 app.get('/api/analytics/word-count', async (req, res) => {
   try {

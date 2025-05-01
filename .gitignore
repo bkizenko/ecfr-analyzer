@@ -50,4 +50,7 @@ jspm_packages/
 .DS_Store
 
 # Data directory
-data/ 
+data/
+
+# Docker
+.dockerignore 
