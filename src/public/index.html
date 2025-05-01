@@ -50,6 +50,7 @@
   <div>
     <button id="wordCountBtn">Show Agency Word Count</button>
     <button id="correctionsBtn">Show Corrections Over Time</button>
+    <button id="titlesBtn">Show CFR Titles</button>
     <span id="loading">Loading data...</span>
   </div>
   
@@ -62,6 +63,7 @@
     document.addEventListener('DOMContentLoaded', function() {
       const wordCountBtn = document.getElementById('wordCountBtn');
       const correctionsBtn = document.getElementById('correctionsBtn');
+      const titlesBtn = document.getElementById('titlesBtn');
       const loading = document.getElementById('loading');
       const chartTitle = document.getElementById('chartTitle');
       
@@ -71,6 +73,10 @@
       
       correctionsBtn.addEventListener('click', function() {
         showCorrections();
+      });
+      
+      titlesBtn.addEventListener('click', function() {
+        showTitles();
       });
       
       async function showWordCount() {
@@ -105,6 +111,41 @@
         } finally {
           loading.style.display = 'none';
         }
+      }
+      
+      async function showTitles() {
+        chartTitle.textContent = 'CFR Titles Status';
+        loading.style.display = 'inline';
+        
+        try {
+          const response = await fetch('/api/titles');
+          const data = await response.json();
+          
+          // Transform data for visualization
+          const titlesData = data.titles.map(title => ({
+            title: title.number.toString(),
+            daysSinceUpdate: daysBetween(new Date(title.up_to_date_as_of), new Date())
+          }));
+          
+          createBarChart(titlesData, 'title', 'daysSinceUpdate', 'CFR Title', 'Days Since Last Update');
+        } catch (error) {
+          console.error('Error fetching titles data:', error);
+          chartTitle.textContent = 'Error loading data';
+        } finally {
+          loading.style.display = 'none';
+        }
+      }
+      
+      function daysBetween(first, second) {
+        // Copy dates to avoid modifying originals
+        const date1 = new Date(first);
+        const date2 = new Date(second);
+        // Discard time part
+        date1.setHours(0, 0, 0, 0);
+        date2.setHours(0, 0, 0, 0);
+        // Calculate difference in days
+        const diff = Math.abs(date2 - date1);
+        return Math.floor(diff / (1000 * 60 * 60 * 24));
       }
       
       function createBarChart(data, xKey, yKey, xLabel, yLabel) {

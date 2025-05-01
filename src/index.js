@@ -54,6 +54,26 @@ app.get('/api/agencies', async (req, res) => {
   }
 });
 
+// Get all titles
+app.get('/api/titles', async (req, res) => {
+  try {
+    const cacheKey = 'titles';
+    const cachedData = cache.get(cacheKey);
+    
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+    
+    const response = await axios.get(`${ECFR_API_BASE}/versioner/v1/titles.json`);
+    cache.set(cacheKey, response.data);
+    
+    res.json(response.data);
+  } catch (error) {
+    console.error('Error fetching titles:', error.message);
+    res.status(500).json({ error: 'Failed to fetch titles' });
+  }
+});
+
 // Get word count by agency
 app.get('/api/analytics/word-count', async (req, res) => {
   try {

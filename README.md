@@ -39,6 +39,7 @@ npm start
 ## API Endpoints
 
 - `/api/agencies` - Get all agencies
+- `/api/titles` - Get all CFR titles
 - `/api/analytics/word-count` - Get approximate word count by agency (sample)
 - `/api/analytics/corrections` - Get corrections over time
 
