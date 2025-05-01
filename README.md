@@ -24,7 +24,7 @@ A simple tool to analyze the Electronic Code of Federal Regulations (eCFR) data.
 
 1. Clone this repository
 ```
-git clone https://github.com/yourusername/ecfr-analyzer.git
+git clone https://github.com/bkizenko/ecfr-analyzer.git
 cd ecfr-analyzer
 ```
 
@@ -44,7 +44,7 @@ npm start
 
 1. Clone this repository
 ```
-git clone https://github.com/yourusername/ecfr-analyzer.git
+git clone https://github.com/bkizenko/ecfr-analyzer.git
 cd ecfr-analyzer
 ```
 
@@ -82,4 +82,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- eCFR API - https://www.ecfr.gov/api 
+- eCFR API - https://www.ecfr.gov/api
