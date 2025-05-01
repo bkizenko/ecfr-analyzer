@@ -72,6 +72,41 @@
       color: #666;
       margin-top: 10px;
     }
+    .advanced-button {
+      background-color: #007bff;
+    }
+    .advanced-button:hover {
+      background-color: #0069d9;
+    }
+    .progress-container {
+      display: none;
+      margin: 20px 0;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+    }
+    .progress-bar-container {
+      width: 100%;
+      background-color: #f0f0f0;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .progress-bar {
+      height: 24px;
+      background-color: #4CAF50;
+      border-radius: 4px;
+      text-align: center;
+      line-height: 24px;
+      color: white;
+    }
+    .status-button {
+      background-color: #6c757d;
+      color: white;
+    }
+    .status-button:hover {
+      background-color: #5a6268;
+    }
   </style>
 </head>
 <body>
@@ -83,6 +118,8 @@
     <button id="correctionsBtn">Show Corrections Over Time</button>
     <button id="titlesBtn">Show CFR Titles</button>
     <button id="titleChangesBtn">Analyze Title Changes</button>
+    <button id="completeWordCountBtn" class="advanced-button">Show Complete Word Count</button>
+    <button id="wordCountStatusBtn" class="status-button">Check Word Count Status</button>
     <span id="loading">Loading data... (word count may take 30-60 seconds)</span>
     
     <div id="titleSelector" class="title-selector">
@@ -90,6 +127,18 @@
       <select id="titleSelect"></select>
       <button id="analyzeTitleBtn">Analyze</button>
     </div>
+  </div>
+  
+  <div id="progressContainer" class="progress-container">
+    <h3>Word Count Processing Status</h3>
+    <div class="progress-bar-container">
+      <div id="progressBar" class="progress-bar" style="width: 0%;">0%</div>
+    </div>
+    <p id="progressStatus">Status: Not started</p>
+    <p id="progressAgency">Currently processing: None</p>
+    <p id="progressTime">Elapsed time: 0 minutes</p>
+    <p id="progressCount">Agencies completed: 0 / 0</p>
+    <p><a href="/word-count-status" target="_blank">View detailed progress in new window</a></p>
   </div>
   
   <div class="chart-container">
@@ -108,6 +157,8 @@
       const correctionsBtn = document.getElementById('correctionsBtn');
       const titlesBtn = document.getElementById('titlesBtn');
       const titleChangesBtn = document.getElementById('titleChangesBtn');
+      const completeWordCountBtn = document.getElementById('completeWordCountBtn');
+      const wordCountStatusBtn = document.getElementById('wordCountStatusBtn');
       const titleSelector = document.getElementById('titleSelector');
       const titleSelect = document.getElementById('titleSelect');
       const analyzeTitleBtn = document.getElementById('analyzeTitleBtn');
@@ -116,30 +167,52 @@
       const metadataContainer = document.getElementById('metadataContainer');
       const metadataContent = document.getElementById('metadataContent');
       const noteElement = document.getElementById('note');
+      const progressContainer = document.getElementById('progressContainer');
+      const progressBar = document.getElementById('progressBar');
+      const progressStatus = document.getElementById('progressStatus');
+      const progressAgency = document.getElementById('progressAgency');
+      const progressTime = document.getElementById('progressTime');
+      const progressCount = document.getElementById('progressCount');
       
       // Event listeners
       wordCountBtn.addEventListener('click', function() {
         hideSelector();
+        hideProgress();
         showWordCount();
       });
       
       correctionsBtn.addEventListener('click', function() {
         hideSelector();
+        hideProgress();
         showCorrections();
       });
       
       titlesBtn.addEventListener('click', function() {
         hideSelector();
+        hideProgress();
         showTitles();
       });
       
       titleChangesBtn.addEventListener('click', function() {
+        hideProgress();
         loadTitles();
+      });
+      
+      completeWordCountBtn.addEventListener('click', function() {
+        hideSelector();
+        hideProgress();
+        showCompleteWordCount();
+      });
+      
+      wordCountStatusBtn.addEventListener('click', function() {
+        hideSelector();
+        checkWordCountStatus();
       });
       
       analyzeTitleBtn.addEventListener('click', function() {
         const selectedTitle = titleSelect.value;
         if (selectedTitle) {
+          hideProgress();
           showTitleChanges(selectedTitle);
         }
       });
@@ -147,6 +220,11 @@
       // Hide the title selector
       function hideSelector() {
         titleSelector.style.display = 'none';
+      }
+      
+      // Hide progress container
+      function hideProgress() {
+        progressContainer.style.display = 'none';
       }
       
       // Show/hide metadata
@@ -185,6 +263,39 @@
       // Format large numbers with commas
       function formatNumber(num) {
         return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      }
+      
+      // Check word count processing status
+      async function checkWordCountStatus() {
+        try {
+          const response = await fetch('/api/analytics/word-count-progress');
+          
+          if (response.status === 404) {
+            showNote("Word count processing has not been started. Run the script manually: 'node src/scripts/wordCountWithProgress.js'");
+            return;
+          }
+          
+          const data = await response.json();
+          
+          // Update progress information
+          progressBar.style.width = `${data.percentComplete}%`;
+          progressBar.textContent = `${data.percentComplete}%`;
+          progressStatus.textContent = `Status: ${capitalizeFirstLetter(data.status)}`;
+          progressAgency.textContent = `Currently processing: ${data.currentAgency || 'None'}`;
+          progressTime.textContent = `Elapsed time: ${data.elapsedMinutes} minutes`;
+          progressCount.textContent = `Agencies completed: ${data.completedAgencies} / ${data.totalAgencies}`;
+          
+          // Show the progress container
+          progressContainer.style.display = 'block';
+          
+          // If still running, check again in 5 seconds
+          if (data.status === 'running') {
+            setTimeout(checkWordCountStatus, 5000);
+          }
+        } catch (error) {
+          console.error('Error checking word count status:', error);
+          showNote("Error checking word count status.");
+        }
       }
       
       // Load available titles for the selector
@@ -260,6 +371,48 @@
           chartTitle.textContent = 'Error loading data';
           showMetadata(null);
           showNote("Error retrieving word count data. The eCFR API may be rate limiting requests or temporarily unavailable.");
+        } finally {
+          loading.style.display = 'none';
+        }
+      }
+      
+      async function showCompleteWordCount() {
+        chartTitle.textContent = 'Complete Regulation Word Count by Agency';
+        loading.style.display = 'inline';
+        showNote("Loading complete word count data...");
+        
+        try {
+          const response = await fetch('/api/analytics/complete-word-count');
+          
+          if (response.status === 404) {
+            showNote("Complete word count not available. Run the full word count script first: 'node src/scripts/wordCountWithProgress.js'");
+            chartTitle.textContent = 'Complete Word Count Not Available';
+            loading.style.display = 'none';
+            return;
+          }
+          
+          const data = await response.json();
+          
+          // Format data for display
+          const formattedData = data.agencies.map(agency => ({
+            ...agency,
+            displayValue: formatNumber(agency.wordCount),
+          }));
+          
+          createBarChart(
+            formattedData,
+            'agency',
+            'wordCount',
+            'Agency',
+            'Complete Regulatory Text Word Count'
+          );
+          
+          showMetadata(data.metadata);
+          showNote("This represents the complete word count of regulatory text by agency, based on processing with the wordCountWithProgress.js script.");
+        } catch (error) {
+          console.error('Error fetching complete word count data:', error);
+          chartTitle.textContent = 'Error Loading Complete Word Count';
+          showNote("Error retrieving complete word count data.");
         } finally {
           loading.style.display = 'none';
         }
@@ -422,6 +575,9 @@
               }
               if (d.sectionsExamined) {
                 tooltip += `\nSections examined: ${d.sectionsExamined}`;
+              }
+              if (d.partsProcessed) {
+                tooltip += `\nParts processed: ${d.partsProcessed}`;
               }
               if (d.note) {
                 tooltip += `\n${d.note}`;
