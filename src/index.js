@@ -345,6 +345,87 @@ app.get('/word-count-status', (req, res) => {
   res.sendFile(path.join(__dirname, '../data/word-counts/status.html'));
 });
 
+// Get small agencies word count results
+app.get('/api/analytics/small-agencies-word-count', async (req, res) => {
+  try {
+    const reportPath = path.join(__dirname, '../data/word-counts-small/word_count_report.json');
+    
+    try {
+      const reportData = await fs.readFile(reportPath, 'utf8');
+      const report = JSON.parse(reportData);
+      
+      res.json({
+        agencies: report,
+        metadata: {
+          measurement: "Word count of smallest agencies' regulatory text",
+          description: "This data represents the regulatory text word count from the smallest agencies (by number of CFR references)",
+          completedAt: new Date(await fs.stat(reportPath)).mtime.toISOString()
+        }
+      });
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // Report doesn't exist yet
+        res.status(404).json({
+          error: 'Small agencies word count report not available',
+          message: 'Run the small agencies word count script first: node src/scripts/smallestWordCount.js'
+        });
+      } else {
+        throw err;
+      }
+    }
+  } catch (error) {
+    console.error('Error retrieving small agencies word count:', error.message);
+    res.status(500).json({ error: 'Failed to retrieve small agencies word count' });
+  }
+});
+
+// Get small agencies word count progress
+app.get('/api/analytics/small-agencies-progress', async (req, res) => {
+  try {
+    const progressPath = path.join(__dirname, '../data/word-counts-small/progress.json');
+    
+    try {
+      const progressData = await fs.readFile(progressPath, 'utf8');
+      const progress = JSON.parse(progressData);
+      
+      const formattedProgress = {
+        status: progress.status,
+        percentComplete: progress.totalAgencies > 0 
+          ? Math.round((progress.completedAgencies / progress.totalAgencies) * 100) 
+          : 0,
+        currentAgency: progress.currentAgency,
+        startTime: progress.startTime,
+        lastUpdateTime: progress.lastSaveTime,
+        totalAgencies: progress.totalAgencies,
+        completedAgencies: progress.completedAgencies,
+        elapsedMinutes: progress.startTime 
+          ? Math.round((new Date() - new Date(progress.startTime)) / 1000 / 60) 
+          : 0
+      };
+      
+      res.json(formattedProgress);
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        // Progress doesn't exist yet
+        res.status(404).json({
+          error: 'Small agencies word count has not been started',
+          message: 'Run the small agencies word count script first: node src/scripts/smallestWordCount.js'
+        });
+      } else {
+        throw err;
+      }
+    }
+  } catch (error) {
+    console.error('Error retrieving small agencies word count progress:', error.message);
+    res.status(500).json({ error: 'Failed to retrieve small agencies word count progress' });
+  }
+});
+
+// Serve the small agencies status.html file directly
+app.get('/small-agencies-status', (req, res) => {
+  res.sendFile(path.join(__dirname, '../data/word-counts-small/status.html'));
+});
+
 // Server initialization
 async function startServer() {
   await ensureDataDir();

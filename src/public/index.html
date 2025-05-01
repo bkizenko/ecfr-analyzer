@@ -120,6 +120,8 @@
     <button id="titleChangesBtn">Analyze Title Changes</button>
     <button id="completeWordCountBtn" class="advanced-button">Show Complete Word Count</button>
     <button id="wordCountStatusBtn" class="status-button">Check Word Count Status</button>
+    <button id="smallAgenciesBtn" class="advanced-button">Show Small Agencies Word Count</button>
+    <button id="smallAgenciesStatusBtn" class="status-button">Check Small Agencies Status</button>
     <span id="loading">Loading data... (word count may take 30-60 seconds)</span>
     
     <div id="titleSelector" class="title-selector">
@@ -159,6 +161,8 @@
       const titleChangesBtn = document.getElementById('titleChangesBtn');
       const completeWordCountBtn = document.getElementById('completeWordCountBtn');
       const wordCountStatusBtn = document.getElementById('wordCountStatusBtn');
+      const smallAgenciesBtn = document.getElementById('smallAgenciesBtn');
+      const smallAgenciesStatusBtn = document.getElementById('smallAgenciesStatusBtn');
       const titleSelector = document.getElementById('titleSelector');
       const titleSelect = document.getElementById('titleSelect');
       const analyzeTitleBtn = document.getElementById('analyzeTitleBtn');
@@ -207,6 +211,17 @@
       wordCountStatusBtn.addEventListener('click', function() {
         hideSelector();
         checkWordCountStatus();
+      });
+      
+      smallAgenciesBtn.addEventListener('click', function() {
+        hideSelector();
+        hideProgress();
+        showSmallAgenciesWordCount();
+      });
+      
+      smallAgenciesStatusBtn.addEventListener('click', function() {
+        hideSelector();
+        checkSmallAgenciesStatus();
       });
       
       analyzeTitleBtn.addEventListener('click', function() {
@@ -295,6 +310,42 @@
         } catch (error) {
           console.error('Error checking word count status:', error);
           showNote("Error checking word count status.");
+        }
+      }
+      
+      // Check small agencies word count processing status
+      async function checkSmallAgenciesStatus() {
+        try {
+          const response = await fetch('/api/analytics/small-agencies-progress');
+          
+          if (response.status === 404) {
+            showNote("Small agencies word count processing has not been started. Run the script manually: 'node src/scripts/smallestWordCount.js'");
+            return;
+          }
+          
+          const data = await response.json();
+          
+          // Update progress information
+          progressBar.style.width = `${data.percentComplete}%`;
+          progressBar.textContent = `${data.percentComplete}%`;
+          progressStatus.textContent = `Status: ${capitalizeFirstLetter(data.status)}`;
+          progressAgency.textContent = `Currently processing: ${data.currentAgency || 'None'}`;
+          progressTime.textContent = `Elapsed time: ${data.elapsedMinutes} minutes`;
+          progressCount.textContent = `Agencies completed: ${data.completedAgencies} / ${data.totalAgencies}`;
+          
+          // Show the progress container
+          progressContainer.style.display = 'block';
+          
+          // Update link to view detailed progress
+          document.querySelector('#progressContainer a').href = '/small-agencies-status';
+          
+          // If still running, check again in 5 seconds
+          if (data.status === 'running') {
+            setTimeout(checkSmallAgenciesStatus, 5000);
+          }
+        } catch (error) {
+          console.error('Error checking small agencies word count status:', error);
+          showNote("Error checking small agencies word count status.");
         }
       }
       
@@ -413,6 +464,56 @@
           console.error('Error fetching complete word count data:', error);
           chartTitle.textContent = 'Error Loading Complete Word Count';
           showNote("Error retrieving complete word count data.");
+        } finally {
+          loading.style.display = 'none';
+        }
+      }
+      
+      async function showSmallAgenciesWordCount() {
+        chartTitle.textContent = 'Small Agencies Regulation Word Count';
+        loading.style.display = 'inline';
+        showNote("Loading small agencies word count data...");
+        
+        try {
+          const response = await fetch('/api/analytics/small-agencies-word-count');
+          
+          if (response.status === 404) {
+            showNote("Small agencies word count not available. Run the script first: 'node src/scripts/smallestWordCount.js'");
+            chartTitle.textContent = 'Small Agencies Word Count Not Available';
+            loading.style.display = 'none';
+            return;
+          }
+          
+          const data = await response.json();
+          
+          // Format data for display
+          const formattedData = data.agencies.map(agency => ({
+            ...agency,
+            displayValue: formatNumber(agency.wordCount),
+            // Add titles info to tooltip
+            titlesText: agency.titles && agency.titles.length > 0 ? 
+              `Titles examined: ${agency.titles.join(', ')}` : 
+              'No titles examined',
+            // Add note about shared regulations if present
+            noteAboutSharing: agency.sharedRegulations ? 
+              agency.sharedRegulationsNote : 
+              'No shared regulations with other agencies in this sample'
+          }));
+          
+          createBarChart(
+            formattedData,
+            'agency',
+            'wordCount',
+            'Agency',
+            'Small Agencies Regulatory Text Word Count'
+          );
+          
+          showMetadata(data.metadata);
+          showNote("This represents the word count of regulatory text for the smallest agencies (by number of CFR references). Note that some agencies share the same regulations - hover over bars for details.");
+        } catch (error) {
+          console.error('Error fetching small agencies word count data:', error);
+          chartTitle.textContent = 'Error Loading Small Agencies Word Count';
+          showNote("Error retrieving small agencies word count data.");
         } finally {
           loading.style.display = 'none';
         }
@@ -578,6 +679,9 @@
               }
               if (d.partsProcessed) {
                 tooltip += `\nParts processed: ${d.partsProcessed}`;
+              }
+              if (d.noteAboutSharing) {
+                tooltip += `\n${d.noteAboutSharing}`;
               }
               if (d.note) {
                 tooltip += `\n${d.note}`;
