@@ -13,7 +13,7 @@
       max-width: 1200px;
       margin: 0 auto;
     }
-    h1, h2 {
+    h1, h2, h3 {
       color: #333;
     }
     .chart-container {
@@ -53,6 +53,20 @@
       display: none;
       margin-top: 10px;
     }
+    .metadata {
+      background-color: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      font-size: 14px;
+      display: none;
+    }
+    .metadata h3 {
+      margin-top: 0;
+    }
+    .metadata p {
+      margin: 8px 0;
+    }
   </style>
 </head>
 <body>
@@ -75,6 +89,10 @@
   
   <div class="chart-container">
     <h2 id="chartTitle">Select a visualization to begin</h2>
+    <div id="metadataContainer" class="metadata">
+      <h3>About this Measurement</h3>
+      <div id="metadataContent"></div>
+    </div>
     <svg id="chart" width="1000" height="500"></svg>
   </div>
   
@@ -89,6 +107,8 @@
       const analyzeTitleBtn = document.getElementById('analyzeTitleBtn');
       const loading = document.getElementById('loading');
       const chartTitle = document.getElementById('chartTitle');
+      const metadataContainer = document.getElementById('metadataContainer');
+      const metadataContent = document.getElementById('metadataContent');
       
       // Event listeners
       wordCountBtn.addEventListener('click', function() {
@@ -120,6 +140,29 @@
       // Hide the title selector
       function hideSelector() {
         titleSelector.style.display = 'none';
+      }
+      
+      // Show/hide metadata
+      function showMetadata(metadata) {
+        if (metadata) {
+          metadataContent.innerHTML = '';
+          
+          // Create metadata display elements
+          for (const [key, value] of Object.entries(metadata)) {
+            const p = document.createElement('p');
+            p.innerHTML = `<strong>${capitalizeFirstLetter(key)}:</strong> ${value}`;
+            metadataContent.appendChild(p);
+          }
+          
+          metadataContainer.style.display = 'block';
+        } else {
+          metadataContainer.style.display = 'none';
+        }
+      }
+      
+      // Helper function to capitalize first letter
+      function capitalizeFirstLetter(string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
       }
       
       // Load available titles for the selector
@@ -162,10 +205,19 @@
           const response = await fetch('/api/analytics/word-count');
           const data = await response.json();
           
-          createBarChart(data.agencies, 'agency', 'wordCount', 'Agency', 'Word Count');
+          // Display the chart
+          createBarChart(data.agencies, 'agency', 'wordCount', 'Agency', 'Word Count (in title/part labels)');
+          
+          // Show metadata if available
+          if (data.metadata) {
+            showMetadata(data.metadata);
+          } else {
+            showMetadata(null);
+          }
         } catch (error) {
           console.error('Error fetching word count data:', error);
           chartTitle.textContent = 'Error loading data';
+          showMetadata(null);
         } finally {
           loading.style.display = 'none';
         }
@@ -174,6 +226,7 @@
       async function showCorrections() {
         chartTitle.textContent = 'Corrections Over Time';
         loading.style.display = 'inline';
+        showMetadata(null);
         
         try {
           const response = await fetch('/api/analytics/corrections');
@@ -191,6 +244,7 @@
       async function showTitles() {
         chartTitle.textContent = 'CFR Titles Status';
         loading.style.display = 'inline';
+        showMetadata(null);
         
         try {
           const response = await fetch('/api/titles');
@@ -214,6 +268,7 @@
       async function showTitleChanges(titleNumber) {
         chartTitle.textContent = `Changes Over Time for Title ${titleNumber}`;
         loading.style.display = 'inline';
+        showMetadata(null);
         
         try {
           const response = await fetch(`/api/analytics/title-changes/${titleNumber}`);
@@ -305,7 +360,16 @@
             .attr('width', x.bandwidth())
             .attr('height', d => height - y(d[yKey]))
             .append('title')
-            .text(d => `${d[xKey]}: ${d[yKey]}`);
+            .text(d => {
+              let tooltip = `${d[xKey]}: ${d[yKey]}`;
+              if (d.measurementUnit) {
+                tooltip += ` ${d.measurementUnit}`;
+              }
+              if (d.note) {
+                tooltip += `\n${d.note}`;
+              }
+              return tooltip;
+            });
       }
     });
   </script>

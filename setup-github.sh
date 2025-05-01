@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Set these variables to your GitHub username and desired repository name
-GITHUB_USERNAME="yourusername"
+GITHUB_USERNAME="bkizenko"
 REPO_NAME="ecfr-analyzer"
 
 # Check if GitHub CLI is installed

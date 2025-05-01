@@ -142,6 +142,8 @@ app.get('/api/analytics/word-count', async (req, res) => {
     for (let i = 0; i < Math.min(10, agencies.length); i++) {
       const agency = agencies[i];
       let totalWords = 0;
+      let totalTitles = 0;
+      let totalParts = 0;
       
       // For each agency, we'll check their CFR references
       if (agency.cfr_references && agency.cfr_references.length > 0) {
@@ -157,6 +159,7 @@ app.get('/api/analytics/word-count', async (req, res) => {
               // Count words in the title label
               const titleWords = structureResponse.data.label.split(/\s+/).length;
               totalWords += titleWords;
+              totalTitles++;
               
               // Sample the first part if available
               if (structureResponse.data.children && 
@@ -168,6 +171,7 @@ app.get('/api/analytics/word-count', async (req, res) => {
                 // Count words in the part label
                 const partWords = firstPart.label.split(/\s+/).length;
                 totalWords += partWords;
+                totalParts++;
               }
               
               break; // Just do one title for demo
@@ -180,12 +184,26 @@ app.get('/api/analytics/word-count', async (req, res) => {
       
       results.push({
         agency: agency.name,
-        wordCount: totalWords
+        wordCount: totalWords,
+        titlesExamined: totalTitles,
+        partsExamined: totalParts,
+        measurementUnit: "words in title and part labels",
+        note: "This is a sample measurement of words in CFR title and part labels, not the full regulatory text"
       });
     }
     
-    cache.set(cacheKey, { agencies: results });
-    res.json({ agencies: results });
+    // Add metadata to the response
+    const response = { 
+      agencies: results,
+      metadata: {
+        measurement: "This count represents the number of words in CFR title and part labels associated with each agency",
+        sampleSize: "Limited to examining one title per agency for demonstration purposes",
+        date: "2023-01-01"
+      }
+    };
+    
+    cache.set(cacheKey, response);
+    res.json(response);
   } catch (error) {
     console.error('Error calculating word count:', error.message);
     res.status(500).json({ error: 'Failed to calculate word count' });
