@@ -138,17 +138,18 @@ app.get('/api/analytics/word-count', async (req, res) => {
     // Initialize results
     const results = [];
     
-    // Process first 10 agencies for demo purposes
-    for (let i = 0; i < Math.min(10, agencies.length); i++) {
+    // Process first 5 agencies for demo purposes (reduce to avoid timeout)
+    for (let i = 0; i < Math.min(5, agencies.length); i++) {
       const agency = agencies[i];
       let totalWords = 0;
-      let totalTitles = 0;
-      let totalParts = 0;
+      let totalSections = 0;
+      let titles = [];
       
       // For each agency, we'll check their CFR references
       if (agency.cfr_references && agency.cfr_references.length > 0) {
-        for (const ref of agency.cfr_references) {
-          // We'll just get the first part of the first title for this demo
+        // Limit to first 2 CFR references per agency for demo
+        for (let j = 0; j < Math.min(2, agency.cfr_references.length); j++) {
+          const ref = agency.cfr_references[j];
           if (ref.title) {
             try {
               // Get the structure of the title
@@ -156,25 +157,37 @@ app.get('/api/analytics/word-count', async (req, res) => {
                 `${ECFR_API_BASE}/versioner/v1/structure/2023-01-01/title-${ref.title}.json`
               );
               
-              // Count words in the title label
-              const titleWords = structureResponse.data.label.split(/\s+/).length;
-              totalWords += titleWords;
-              totalTitles++;
+              titles.push(ref.title);
               
-              // Sample the first part if available
+              // If the structure has parts, get a sample of sections to count words
               if (structureResponse.data.children && 
                   structureResponse.data.children.length > 0 &&
-                  structureResponse.data.children[0].children &&
-                  structureResponse.data.children[0].children.length > 0) {
+                  structureResponse.data.children[0].children) {
                 
-                const firstPart = structureResponse.data.children[0].children[0];
-                // Count words in the part label
-                const partWords = firstPart.label.split(/\s+/).length;
-                totalWords += partWords;
-                totalParts++;
+                // Get first 2 parts
+                const parts = structureResponse.data.children[0].children.slice(0, 2);
+                
+                // For each part, get XML content to count actual regulation words
+                for (const part of parts) {
+                  try {
+                    // Get XML content of the part
+                    const partXml = await axios.get(
+                      `${ECFR_API_BASE}/versioner/v1/full/2023-01-01/title-${ref.title}.xml?part=${part.identifier}`,
+                      { responseType: 'text' }
+                    );
+                    
+                    // Count words in the XML content
+                    // Remove XML tags and count words
+                    const textContent = partXml.data.replace(/<[^>]*>/g, ' ');
+                    const words = textContent.split(/\s+/).filter(word => word.length > 0);
+                    totalWords += words.length;
+                    totalSections++;
+                  } catch (err) {
+                    console.log(`Error processing part ${part.identifier} for title ${ref.title}:`, err.message);
+                  }
+                }
               }
               
-              break; // Just do one title for demo
             } catch (err) {
               console.log(`Error processing title ${ref.title} for agency ${agency.name}:`, err.message);
             }
@@ -185,10 +198,10 @@ app.get('/api/analytics/word-count', async (req, res) => {
       results.push({
         agency: agency.name,
         wordCount: totalWords,
-        titlesExamined: totalTitles,
-        partsExamined: totalParts,
-        measurementUnit: "words in title and part labels",
-        note: "This is a sample measurement of words in CFR title and part labels, not the full regulatory text"
+        sectionsExamined: totalSections,
+        titlesExamined: titles,
+        measurementUnit: "words in regulatory text",
+        note: "Sample count of words in actual regulatory text for selected parts"
       });
     }
     
@@ -196,8 +209,8 @@ app.get('/api/analytics/word-count', async (req, res) => {
     const response = { 
       agencies: results,
       metadata: {
-        measurement: "This count represents the number of words in CFR title and part labels associated with each agency",
-        sampleSize: "Limited to examining one title per agency for demonstration purposes",
+        measurement: "This count represents the number of words in the actual regulatory text associated with each agency",
+        sampleSize: "Limited to examining a sample of titles and parts per agency for demonstration purposes",
         date: "2023-01-01"
       }
     };

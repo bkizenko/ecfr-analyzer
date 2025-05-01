@@ -67,6 +67,11 @@
     .metadata p {
       margin: 8px 0;
     }
+    .note {
+      font-style: italic;
+      color: #666;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -74,11 +79,11 @@
   <p>A simple tool to analyze the Electronic Code of Federal Regulations</p>
   
   <div class="controls">
-    <button id="wordCountBtn">Show Agency Word Count</button>
+    <button id="wordCountBtn">Show Agency Regulation Word Count</button>
     <button id="correctionsBtn">Show Corrections Over Time</button>
     <button id="titlesBtn">Show CFR Titles</button>
     <button id="titleChangesBtn">Analyze Title Changes</button>
-    <span id="loading">Loading data...</span>
+    <span id="loading">Loading data... (word count may take 30-60 seconds)</span>
     
     <div id="titleSelector" class="title-selector">
       <label for="titleSelect">Select CFR Title:</label>
@@ -93,6 +98,7 @@
       <h3>About this Measurement</h3>
       <div id="metadataContent"></div>
     </div>
+    <p id="note" class="note"></p>
     <svg id="chart" width="1000" height="500"></svg>
   </div>
   
@@ -109,6 +115,7 @@
       const chartTitle = document.getElementById('chartTitle');
       const metadataContainer = document.getElementById('metadataContainer');
       const metadataContent = document.getElementById('metadataContent');
+      const noteElement = document.getElementById('note');
       
       // Event listeners
       wordCountBtn.addEventListener('click', function() {
@@ -160,9 +167,24 @@
         }
       }
       
+      // Show/hide note
+      function showNote(text) {
+        if (text) {
+          noteElement.textContent = text;
+          noteElement.style.display = 'block';
+        } else {
+          noteElement.style.display = 'none';
+        }
+      }
+      
       // Helper function to capitalize first letter
       function capitalizeFirstLetter(string) {
         return string.charAt(0).toUpperCase() + string.slice(1);
+      }
+      
+      // Format large numbers with commas
+      function formatNumber(num) {
+        return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
       }
       
       // Load available titles for the selector
@@ -198,15 +220,32 @@
       
       // API call functions
       async function showWordCount() {
-        chartTitle.textContent = 'Word Count by Agency';
+        chartTitle.textContent = 'Regulation Word Count by Agency';
         loading.style.display = 'inline';
+        showNote("Loading... This analysis retrieves and counts actual regulation text, which may take some time.");
         
         try {
           const response = await fetch('/api/analytics/word-count');
           const data = await response.json();
           
+          // Format data for display - format large numbers with commas
+          const formattedData = data.agencies.map(agency => ({
+            ...agency,
+            wordCount: agency.wordCount,
+            displayValue: formatNumber(agency.wordCount), // For tooltip display
+            titlesText: Array.isArray(agency.titlesExamined) ? 
+              `Titles examined: ${agency.titlesExamined.join(', ')}` : 
+              `Titles examined: ${agency.titlesExamined}`
+          }));
+          
           // Display the chart
-          createBarChart(data.agencies, 'agency', 'wordCount', 'Agency', 'Word Count (in title/part labels)');
+          createBarChart(
+            formattedData, 
+            'agency', 
+            'wordCount', 
+            'Agency', 
+            'Word Count in Regulatory Text'
+          );
           
           // Show metadata if available
           if (data.metadata) {
@@ -214,10 +253,13 @@
           } else {
             showMetadata(null);
           }
+          
+          showNote("Note: This is a sample of the regulatory text. The actual complete regulations would have significantly more words.");
         } catch (error) {
           console.error('Error fetching word count data:', error);
           chartTitle.textContent = 'Error loading data';
           showMetadata(null);
+          showNote("Error retrieving word count data. The eCFR API may be rate limiting requests or temporarily unavailable.");
         } finally {
           loading.style.display = 'none';
         }
@@ -227,6 +269,7 @@
         chartTitle.textContent = 'Corrections Over Time';
         loading.style.display = 'inline';
         showMetadata(null);
+        showNote(null);
         
         try {
           const response = await fetch('/api/analytics/corrections');
@@ -245,6 +288,7 @@
         chartTitle.textContent = 'CFR Titles Status';
         loading.style.display = 'inline';
         showMetadata(null);
+        showNote(null);
         
         try {
           const response = await fetch('/api/titles');
@@ -269,6 +313,7 @@
         chartTitle.textContent = `Changes Over Time for Title ${titleNumber}`;
         loading.style.display = 'inline';
         showMetadata(null);
+        showNote(null);
         
         try {
           const response = await fetch(`/api/analytics/title-changes/${titleNumber}`);
@@ -302,7 +347,7 @@
         d3.select('#chart').selectAll('*').remove();
         
         const svg = d3.select('#chart');
-        const margin = {top: 20, right: 20, bottom: 70, left: 80};
+        const margin = {top: 20, right: 20, bottom: 70, left: 100}; // Increased left margin for larger numbers
         const width = +svg.attr('width') - margin.left - margin.right;
         const height = +svg.attr('height') - margin.top - margin.bottom;
         
@@ -331,9 +376,16 @@
             .attr('transform', 'translate(-10,0)rotate(-45)')
             .style('text-anchor', 'end');
         
-        // Add Y axis
+        // Add Y axis with formatted tick values for large numbers
         g.append('g')
-          .call(d3.axisLeft(y));
+          .call(d3.axisLeft(y).tickFormat(d => {
+            if (d >= 1000000) {
+              return (d / 1000000).toFixed(1) + 'M';
+            } else if (d >= 1000) {
+              return (d / 1000).toFixed(1) + 'K';
+            }
+            return d;
+          }));
         
         // Add X axis label
         g.append('text')
@@ -361,9 +413,15 @@
             .attr('height', d => height - y(d[yKey]))
             .append('title')
             .text(d => {
-              let tooltip = `${d[xKey]}: ${d[yKey]}`;
+              let tooltip = `${d[xKey]}: ${d.displayValue || d[yKey]}`;
               if (d.measurementUnit) {
                 tooltip += ` ${d.measurementUnit}`;
+              }
+              if (d.titlesText) {
+                tooltip += `\n${d.titlesText}`;
+              }
+              if (d.sectionsExamined) {
+                tooltip += `\nSections examined: ${d.sectionsExamined}`;
               }
               if (d.note) {
                 tooltip += `\n${d.note}`;
